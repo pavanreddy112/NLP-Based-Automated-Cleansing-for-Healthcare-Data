@@ -1,53 +1,72 @@
 import streamlit as st
 import requests
+import json
 
-# IBM Cloud API Credentials
-API_KEY = "26OF7RolbSCEU03s0h9fHXgbbEE_5TBVW7SXSW4OmaoL"  # Replace with your IBM API key
-DEPLOYMENT_URL = "https://private.us-south.ml.cloud.ibm.com/ml/v4/deployments/fe8ead3a-16d8-45e2-805f-914f4a2206df/predictions?version=2021-05-01"
+# 🔹 IBM Cloud API Credentials
+API_KEY = "26OF7RolbSCEU03s0h9fHXgbbEE_5TBVW7SXSW4OmaoL"  # Replace with your actual API key
+DEPLOYMENT_URL = "https://us-south.ml.cloud.ibm.com/ml/v4/deployments/fe8ead3a-16d8-45e2-805f-914f4a2206df/predictions?version=2021-05-01"
 
-# Function to get IBM authentication token
+# 🔹 Function to Get IBM Auth Token
 def get_ibm_token():
     token_url = "https://iam.cloud.ibm.com/identity/token"
-    payload = {"apikey": API_KEY, "grant_type": "urn:ibm:params:oauth:grant-type:apikey"}
-    response = requests.post(token_url, data=payload)
-    return response.json().get("access_token")
+    payload = {
+        "apikey": API_KEY,
 
-# Function to predict medical condition
-def predict_medical_condition(inputs):
-    token = get_ibm_token()
-    if not token:
-        return "❌ Authentication Failed"
-
-    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        "grant_type": "urn:ibm:params:oauth:grant-type:apikey"
+    }
     
-    # Constructing JSON in required format
+    try:
+        response = requests.post(token_url, data=payload, timeout=15)  # Increased timeout
+        response.raise_for_status()
+        return response.json().get("access_token")
+    
+    except requests.exceptions.Timeout:
+        return "TIMEOUT_ERROR"
+    except requests.exceptions.RequestException as e:
+        return f"REQUEST_ERROR: {e}"
+
+# 🔹 Function to Predict Medical Condition
+def predict_medical_condition(user_inputs):
+    token = get_ibm_token()
+    if "ERROR" in token:
+        return f"❌ Authentication Failed: {token}"
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+
     payload = {
         "input_data": [
             {
                 "fields": [
-                    "Name", "Age", "Gender", "Blood Type", "Date of Admission", "Doctor", 
-                    "Hospital", "Insurance Provider", "Billing Amount", "Room Number", 
-                    "Admission Type", "Discharge Date", "Medication", "Test Results"
+                    "Name", "Age", "Gender", "Blood Type", "Date of Admission", 
+                    "Doctor", "Hospital", "Insurance Provider", "Billing Amount", 
+                    "Room Number", "Admission Type", "Discharge Date", "Medication", "Test Results"
                 ],
-                "values": [inputs]
+                "values": [user_inputs]
             }
         ]
     }
 
-    # Sending request to IBM API
-    response = requests.post(DEPLOYMENT_URL, json=payload, headers=headers)
+    try:
+        response = requests.post(DEPLOYMENT_URL, json=payload, headers=headers, timeout=30)  # Increased timeout
+        response.raise_for_status()
+        result = response.json()
 
-    if response.status_code == 200:
-        prediction = response.json()["predictions"][0]["values"][0][0]  # Extract prediction
+        # Extracting prediction result
+        prediction = result["predictions"][0]["values"][0][0]
         return f"🩺 **Predicted Medical Condition:** {prediction}"
-    else:
-        return f"❌ API Error: {response.text}"
 
-# Streamlit UI
+    except requests.exceptions.Timeout:
+        return "⏳ IBM Cloud API Timeout. Please try again later."
+    except requests.exceptions.RequestException as e:
+        return f"❌ API Request Error: {e}"
+
+# 🔹 Streamlit UI
 def predict_page():
     st.title("🩺 AI-Based Medical Condition Predictor")
 
-    # Form for user input
     with st.form("medical_form"):
         name = st.text_input("👤 Name")
         age = st.number_input("👴 Age", min_value=0, max_value=120, step=1)
@@ -73,7 +92,6 @@ def predict_page():
             str(discharge_date), medication, test_results
         ]
         
-        # Call prediction function
         result = predict_medical_condition(user_inputs)
         st.success(result)
 

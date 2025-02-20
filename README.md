@@ -69,7 +69,11 @@ Follow these steps to set up and run the project locally.
 1. **Start the Streamlit App**:
 
    ```bash
-   streamlit run app.py
+   streamlit run main.py
+   ```
+   - Or
+   ```bash
+   python -m streamlit run main.py
    ```
 
 
